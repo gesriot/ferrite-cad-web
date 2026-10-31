@@ -1,0 +1,54 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #141210;
+  --color-surface: #1c1915;
+  --color-surface-2: #26221c;
+  --color-fg: #f3efe6;
+  --color-muted: #a3988c;
+  --color-faint: #6f675c;
+  --color-primary: #e06a2f;
+  --color-primary-ink: #2a1208;
+  --color-brass: #e0b15a;
+  --color-border: #3a342c;
+  --color-ok: #9cba7a;
+  --color-bad: #e15b4a;
+  --color-steel: #c4bdb2;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-sm: 0.25rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  input,
+  button {
+    font: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cad-app * {
+    transition: none !important;
+  }
+}

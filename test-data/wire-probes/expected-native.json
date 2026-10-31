@@ -1,0 +1,34 @@
+[
+  {
+    "file": "control.fcad",
+    "exit": 0
+  },
+  {
+    "file": "importer-id-bom.fcad",
+    "exit": 0
+  },
+  {
+    "file": "importer-id-nel.fcad",
+    "exit": 2
+  },
+  {
+    "file": "importer-version-bom.fcad",
+    "exit": 0
+  },
+  {
+    "file": "importer-version-nel.fcad",
+    "exit": 2
+  },
+  {
+    "file": "solids-wide-uint.fcad",
+    "exit": 0
+  },
+  {
+    "file": "source-length-wide-uint.fcad",
+    "exit": 0
+  },
+  {
+    "file": "unknown-numeric-map.fcad",
+    "exit": 0
+  }
+]

@@ -1,0 +1,37 @@
+# Dependencies and generated output
+node_modules/
+.vercel/
+.tanstack/
+.nitro/
+.output/
+dist/
+coverage/
+artifacts/
+logs/
+screenshots/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# Local environment and platform session files
+.env
+.env.*
+!.env.example
+*.local
+.project_id
+.node_modules.lock
+.preview/
+
+# External review packages and agent instructions
+review-*/
+audit/
+attachments/
+AGENTS.md
+AGENTS.project.md
+SKILL.md
+NEXT-PROMPT.md
+REVIEW.md
+REPORT.md
+ferritecad-review-*.zip*

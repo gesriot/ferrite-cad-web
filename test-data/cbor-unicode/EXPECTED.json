@@ -1,0 +1,21 @@
+{
+  "bom-operation": {
+    "nativeValid": false,
+    "expectedWeb": "invalid",
+    "saveHeight": "reject"
+  },
+  "bom-operation-saved": {
+    "nativeValid": false,
+    "expectedWeb": "invalid",
+    "saveHeight": "reject"
+  },
+  "bom-unknown-key": {
+    "nativeValid": true,
+    "expectedWeb": "editable",
+    "saveHeight": "accept",
+    "originalReversed": false,
+    "unknownField": "\\uFEFFreversed",
+    "mustPreserveUnknownField": true
+  },
+  "textRule": "No stripping U+FEFF from any string or key; invalid UTF-8 and identical duplicate keys still rejected"
+}

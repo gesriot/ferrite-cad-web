@@ -1,0 +1,241 @@
+{
+  "id": "review-user-flange",
+  "name": "Мой фланец Ω",
+  "unit": "mm",
+  "parameters": [
+    {
+      "id": "od",
+      "name": "Наружный Ø",
+      "value": 72,
+      "unit": "мм"
+    },
+    {
+      "id": "bore",
+      "name": "Отверстие Ø",
+      "value": 18,
+      "unit": "мм"
+    },
+    {
+      "id": "thick",
+      "name": "Толщина",
+      "value": 8,
+      "unit": "мм"
+    },
+    {
+      "id": "hubD",
+      "name": "Ступица Ø",
+      "value": 32,
+      "unit": "мм"
+    },
+    {
+      "id": "hubH",
+      "name": "Ступица",
+      "value": 10,
+      "unit": "мм"
+    },
+    {
+      "id": "boltD",
+      "name": "Болты Ø",
+      "value": 5.5,
+      "unit": "мм"
+    },
+    {
+      "id": "boltN",
+      "name": "Болтов",
+      "value": 6,
+      "unit": "шт"
+    },
+    {
+      "id": "pcd",
+      "name": "Диаметр центров",
+      "value": 54,
+      "unit": "мм"
+    }
+  ],
+  "sketches": [
+    {
+      "id": "sk-disk",
+      "name": "Эскиз заказчика",
+      "plane": "XY",
+      "offset": 0,
+      "points": [
+        {
+          "id": "c-disk",
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "loops": [
+        {
+          "id": "loop-od",
+          "kind": "circle",
+          "centerId": "c-disk",
+          "radius": 36
+        },
+        {
+          "id": "loop-bore",
+          "kind": "circle",
+          "centerId": "c-disk",
+          "radius": 9
+        }
+      ],
+      "constraints": [
+        {
+          "id": "fix-disk",
+          "type": "fixed",
+          "pointId": "c-disk",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "rad-od",
+          "type": "radius",
+          "loopId": "loop-od",
+          "value": 36,
+          "ref": {
+            "paramId": "od",
+            "scale": 0.5
+          },
+          "display": "diameter"
+        },
+        {
+          "id": "rad-bore",
+          "type": "radius",
+          "loopId": "loop-bore",
+          "value": 9,
+          "ref": {
+            "paramId": "bore",
+            "scale": 0.5
+          },
+          "display": "diameter"
+        }
+      ]
+    },
+    {
+      "id": "sk-hub",
+      "name": "Ступица",
+      "plane": "XY",
+      "offset": 7.6,
+      "points": [
+        {
+          "id": "c-hub",
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "loops": [
+        {
+          "id": "loop-hub",
+          "kind": "circle",
+          "centerId": "c-hub",
+          "radius": 16
+        },
+        {
+          "id": "loop-hub-bore",
+          "kind": "circle",
+          "centerId": "c-hub",
+          "radius": 9
+        }
+      ],
+      "constraints": [
+        {
+          "id": "fix-hub",
+          "type": "fixed",
+          "pointId": "c-hub",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "rad-hub",
+          "type": "radius",
+          "loopId": "loop-hub",
+          "value": 16,
+          "ref": {
+            "paramId": "hubD",
+            "scale": 0.5
+          },
+          "display": "diameter"
+        },
+        {
+          "id": "rad-hub-bore",
+          "type": "radius",
+          "loopId": "loop-hub-bore",
+          "value": 9,
+          "ref": {
+            "paramId": "bore",
+            "scale": 0.5
+          },
+          "display": "diameter"
+        }
+      ],
+      "offsetRef": {
+        "paramId": "thick",
+        "offset": -0.4
+      }
+    }
+  ],
+  "features": [
+    {
+      "id": "solid-flange",
+      "kind": "solid",
+      "name": "Диск",
+      "sketchId": "sk-disk",
+      "mode": "extrude",
+      "depth": 8,
+      "depthRef": {
+        "paramId": "thick"
+      },
+      "symmetric": false,
+      "flipped": false,
+      "angle": 360,
+      "axis": "Y",
+      "operation": "new"
+    },
+    {
+      "id": "solid-hub",
+      "kind": "solid",
+      "name": "Ступица заказчика",
+      "sketchId": "sk-hub",
+      "mode": "extrude",
+      "depth": 10.4,
+      "depthRef": {
+        "paramId": "hubH",
+        "offset": 0.4
+      },
+      "symmetric": false,
+      "flipped": false,
+      "angle": 360,
+      "axis": "Y",
+      "operation": "new"
+    },
+    {
+      "id": "hole-bolts",
+      "kind": "hole",
+      "name": "Болты",
+      "plane": "XY",
+      "offset": 0,
+      "travel": -1,
+      "diameter": 5.5,
+      "diameterRef": {
+        "paramId": "boltD"
+      },
+      "depth": null,
+      "places": [
+        {
+          "mode": "pcd",
+          "cx": 0,
+          "cy": 0,
+          "pcd": 54,
+          "count": 6,
+          "pcdRef": {
+            "paramId": "pcd"
+          },
+          "countRef": {
+            "paramId": "boltN"
+          },
+          "startDeg": 0
+        }
+      ]
+    }
+  ]
+}

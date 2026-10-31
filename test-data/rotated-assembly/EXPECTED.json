@@ -1,0 +1,111 @@
+{
+  "file": "08-rotated-nested.step",
+  "sha256": "c8143c69477739d66345a5d3358f69bb8d38f0100891cb0313a4c75feafbd59a",
+  "units": "mm",
+  "partDefinitions": 1,
+  "partOccurrences": 4,
+  "assemblyDefinitions": 2,
+  "nodes": 7,
+  "leafVolumeMm3": 32000,
+  "worldBox": [
+    0,
+    20,
+    0,
+    100,
+    70,
+    25
+  ],
+  "leafWorldMatricesRowMajor": [
+    [
+      0,
+      -1,
+      0,
+      100,
+      1,
+      0,
+      0,
+      20,
+      0,
+      0,
+      1,
+      5
+    ],
+    [
+      0,
+      -1,
+      0,
+      100,
+      1,
+      0,
+      0,
+      50,
+      0,
+      0,
+      1,
+      5
+    ],
+    [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      40,
+      0,
+      0,
+      1,
+      0
+    ],
+    [
+      1,
+      0,
+      0,
+      30,
+      0,
+      1,
+      0,
+      40,
+      0,
+      0,
+      1,
+      0
+    ]
+  ],
+  "leafWorldBoxes": [
+    [
+      80,
+      20,
+      5,
+      100,
+      40,
+      25
+    ],
+    [
+      80,
+      50,
+      5,
+      100,
+      70,
+      25
+    ],
+    [
+      0,
+      40,
+      0,
+      20,
+      60,
+      20
+    ],
+    [
+      30,
+      40,
+      0,
+      50,
+      60,
+      20
+    ]
+  ],
+  "notes": "Supplemental native-generated fixture, not a replacement for canonical 01-07. Expected matrices and boxes calculated from definition cube [0,20]^3 and the prescribed transforms. Match occurrences by transform, not file traversal order."
+}

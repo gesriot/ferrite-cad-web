@@ -1,0 +1,191 @@
+{
+  "meta": [
+    {
+      "id": 1,
+      "format_version": 1,
+      "minimum_reader_version": 1,
+      "document_id": {
+        "$bytes": "01a152767bb77b91999e965810245611"
+      },
+      "display_length_unit": "mm",
+      "display_angle_unit": "deg",
+      "created_at": "2026-10-19T04:40:59.063Z",
+      "modified_at": "2026-10-19T04:40:59.064Z",
+      "generator": "FerriteCAD 0.0.1"
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "core.part.v1",
+      "required": 1
+    },
+    {
+      "name": "exchange.step.imported.v1",
+      "required": 1
+    }
+  ],
+  "schema": [
+    {
+      "name": "capabilities",
+      "sql": "CREATE TABLE capabilities (\n    name     TEXT    PRIMARY KEY NOT NULL,\n    required INTEGER NOT NULL CHECK (required IN (0, 1))\n) STRICT"
+    },
+    {
+      "name": "checkpoints",
+      "sql": "CREATE TABLE checkpoints (\n    id         BLOB    PRIMARY KEY NOT NULL CHECK (length(id) = 16),\n    name       TEXT    NOT NULL CHECK (length(name) BETWEEN 1 AND 80),\n    created_at TEXT    NOT NULL,\n    -- `Document::model_without_checkpoints` of the image.\n    model      BLOB    NOT NULL CHECK (length(model) = 32),\n    byte_len   INTEGER NOT NULL CHECK (byte_len > 0),\n    -- BLAKE3-256 of `image`, checked before the bytes are used.\n    image_hash BLOB    NOT NULL CHECK (length(image_hash) = 32),\n    image      BLOB    NOT NULL,\n    CHECK (length(image) = byte_len)\n) STRICT"
+    },
+    {
+      "name": "deps",
+      "sql": "CREATE TABLE deps (\n    dependent_id  BLOB NOT NULL REFERENCES objects(id) ON DELETE CASCADE,\n    dependency_id BLOB NOT NULL REFERENCES objects(id) ON DELETE RESTRICT,\n    role          TEXT NOT NULL,\n    PRIMARY KEY (dependent_id, dependency_id, role)\n) STRICT, WITHOUT ROWID"
+    },
+    {
+      "name": "deps_by_dependency",
+      "sql": "CREATE INDEX deps_by_dependency ON deps(dependency_id)"
+    },
+    {
+      "name": "imported_source_refs",
+      "sql": "CREATE TABLE imported_source_refs (\n    object_id BLOB NOT NULL REFERENCES objects(id) ON DELETE CASCADE,\n    source_id BLOB NOT NULL REFERENCES imported_sources(id) ON DELETE RESTRICT,\n    PRIMARY KEY (object_id, source_id)\n) STRICT, WITHOUT ROWID"
+    },
+    {
+      "name": "imported_source_refs_by_source",
+      "sql": "CREATE INDEX imported_source_refs_by_source ON imported_source_refs(source_id)"
+    },
+    {
+      "name": "imported_sources",
+      "sql": "CREATE TABLE imported_sources (\n    id           BLOB    PRIMARY KEY NOT NULL CHECK (length(id) = 16),\n    -- A project-owned tag rather than a media type: what this names is how\n    -- FerriteCAD reads the bytes, which is a narrower claim than what the\n    -- bytes are, and one this project is entitled to make.\n    format       TEXT    NOT NULL,\n    bytes        BLOB    NOT NULL,\n    -- BLAKE3-256, the same digest as objects.payload_hash and\n    -- topology_refs.payload_hash. Checked on every read, before the bytes\n    -- reach anything that would interpret them.\n    content_hash BLOB    NOT NULL CHECK (length(content_hash) = 32),\n    byte_len     INTEGER NOT NULL CHECK (byte_len >= 0),\n    created_at   TEXT    NOT NULL,\n    -- A length that disagrees with the blob is corruption SQLite can catch\n    -- without help, so it does.\n    CHECK (length(bytes) = byte_len)\n) STRICT"
+    },
+    {
+      "name": "imported_sources_by_content",
+      "sql": "CREATE UNIQUE INDEX imported_sources_by_content ON imported_sources(format, content_hash)"
+    },
+    {
+      "name": "meta",
+      "sql": "CREATE TABLE meta (\n    id                     INTEGER PRIMARY KEY CHECK (id = 1),\n    format_version         INTEGER NOT NULL,\n    minimum_reader_version INTEGER NOT NULL,\n    document_id            BLOB    NOT NULL CHECK (length(document_id) = 16),\n    display_length_unit    TEXT    NOT NULL,\n    display_angle_unit     TEXT    NOT NULL,\n    created_at             TEXT    NOT NULL,\n    modified_at            TEXT    NOT NULL,\n    generator              TEXT    NOT NULL\n) STRICT"
+    },
+    {
+      "name": "objects",
+      "sql": "CREATE TABLE objects (\n    id             BLOB    PRIMARY KEY NOT NULL CHECK (length(id) = 16),\n    kind           TEXT    NOT NULL,\n    schema_version INTEGER NOT NULL,\n    parent_id      BLOB    REFERENCES objects(id) ON DELETE CASCADE,\n    ordinal        INTEGER NOT NULL DEFAULT 0,\n    name           TEXT,\n    payload        BLOB    NOT NULL,\n    payload_hash   BLOB    NOT NULL CHECK (length(payload_hash) = 32)\n) STRICT"
+    },
+    {
+      "name": "objects_by_kind",
+      "sql": "CREATE INDEX objects_by_kind ON objects(kind)"
+    },
+    {
+      "name": "objects_by_parent",
+      "sql": "CREATE INDEX objects_by_parent ON objects(parent_id, ordinal)"
+    },
+    {
+      "name": "topology_refs",
+      "sql": "CREATE TABLE topology_refs (\n    id                BLOB PRIMARY KEY NOT NULL CHECK (length(id) = 16),\n    owner_id          BLOB NOT NULL REFERENCES objects(id) ON DELETE CASCADE,\n    producer_feature  BLOB NOT NULL REFERENCES objects(id) ON DELETE RESTRICT,\n    expected_kind     TEXT NOT NULL,\n    payload           BLOB NOT NULL\n, payload_hash BLOB CHECK (payload_hash IS NULL OR length(payload_hash) = 32)) STRICT"
+    },
+    {
+      "name": "topology_refs_by_owner",
+      "sql": "CREATE INDEX topology_refs_by_owner ON topology_refs(owner_id)"
+    },
+    {
+      "name": "topology_refs_by_producer",
+      "sql": "CREATE INDEX topology_refs_by_producer ON topology_refs(producer_feature)"
+    }
+  ],
+  "objects": [
+    {
+      "id": {
+        "$bytes": "01a152767bb470f19d15b85029e00682"
+      },
+      "kind": "exchange.step.imported",
+      "schema_version": 3,
+      "parent_id": null,
+      "ordinal": 0,
+      "name": "07-bare-geometry",
+      "payload_hash": {
+        "$bytes": "6b5df616edb154bffe2bcd3e2c5a1379dfc1ee2fe2d474f16ba567097d4fb3cf"
+      },
+      "envelope": {
+        "type": "exchange.step.imported",
+        "schema_version": 3,
+        "required_capabilities": [
+          "exchange.step.imported.v1"
+        ],
+        "payload": {
+          "source": {
+            "$bytes": "01a152767bb87291ba9790a0683975c7"
+          },
+          "source_hash": {
+            "$bytes": "3754607ee013b02e76df207b9905906ad0a1f8a1091b2713e9e2bad718be60c4"
+          },
+          "source_byte_len": 15410,
+          "source_name": "07-bare-geometry.step",
+          "scene": {
+            "source_unit": "millimetre",
+            "schema": "AP242_MANAGED_MODEL_BASED_3D_ENGINEERING_MIM_LF {1 0 10303 442 1 1 4 }",
+            "definitions": [
+              {
+                "key": "step.product_definition#5",
+                "name": "SOLID",
+                "solids": 1
+              }
+            ],
+            "instances": [
+              {
+                "occurrence": {
+                  "$bytes": "01a152767bb77b91999e966421859042"
+                },
+                "definition": "step.product_definition#5",
+                "parent": null,
+                "name": "SOLID",
+                "placement": [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0
+                ],
+                "colour_source": "none",
+                "colour": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ]
+          },
+          "imported_by": {
+            "id": "occt",
+            "version": "8.0.1",
+            "build": "bridge 47a4663763471c685b7063b71c07589a25d5a455b834bada3e55a3e900375278 aarch64-apple-darwin"
+          },
+          "diagnostics_at_import": []
+        }
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": {
+        "$bytes": "01a152767bb87291ba9790a0683975c7"
+      },
+      "format": "exchange.step",
+      "content_hash": {
+        "$bytes": "3754607ee013b02e76df207b9905906ad0a1f8a1091b2713e9e2bad718be60c4"
+      },
+      "byte_len": 15410,
+      "created_at": "2026-10-19T04:40:59.064Z"
+    }
+  ],
+  "refs": [
+    {
+      "object_id": {
+        "$bytes": "01a152767bb470f19d15b85029e00682"
+      },
+      "source_id": {
+        "$bytes": "01a152767bb87291ba9790a0683975c7"
+      }
+    }
+  ]
+}

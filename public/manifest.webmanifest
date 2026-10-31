@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Ferrite CAD",
+  "short_name": "Ferrite CAD",
+  "description": "CAD documents and STEP assemblies in the browser.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#141210",
+  "theme_color": "#141210",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

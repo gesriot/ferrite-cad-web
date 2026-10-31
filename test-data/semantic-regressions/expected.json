@@ -1,0 +1,18 @@
+{
+  "keep-faces-valid": "unsupported",
+  "keep-faces-edge-kind": "invalid",
+  "revolve-min-inclusive": "unsupported",
+  "revolve-max-inclusive": "unsupported",
+  "revolve-below-min": "invalid",
+  "revolve-above-max": "invalid",
+  "revolve-circle-axis": "invalid",
+  "chamfer-empty-edges": "invalid",
+  "chamfer-face-reference": "invalid",
+  "fillet-face-reference": "invalid",
+  "fillet-duplicate-meaning": "invalid",
+  "up-to-vertex-all-descendants": "invalid",
+  "up-to-face-no-support": "invalid",
+  "circle-profile": "unsupported",
+  "construction-profile": "unsupported",
+  "open-profile": "unsupported"
+}

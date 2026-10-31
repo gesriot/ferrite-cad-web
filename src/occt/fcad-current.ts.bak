@@ -1,0 +1,419 @@
+/**
+ * Reader for the current native FCAD layout (main dd51dc38).
+ *
+ * user_version 0 is SQLite's default, not a schema version. Recognition is the
+ * table shape: no format_version, no capabilities, no objects.schema_version,
+ * envelope is type + nested payload. This is not a migration of historical files.
+ *
+ * Container, payload, link and semantic checks live in one path. Family
+ * detection only chooses the decoder. Extraction and the plate editor both
+ * call it; neither can skip application_id, metadata, integrity, hashes or
+ * the understood reference contract.
+ */
+import { blake3 } from "@noble/hashes/blake3";
+import { cborToValue, decodeCbor, field, textOf } from "./cbor.ts";
+import { decodeBody, decodeExtrude, decodePlane, decodeSketch, decodeTopology } from "./fcad-decode.ts";
+import { decodeImportedPayload } from "./fcad-scene.ts";
+import { blake3Hex, bytesEqual, hashMatches, isUuidV7, requireUuidV7, uuidOf, type SketchCurve } from "./fcad.ts";
+import type { FcadDocument, ImportedSourceMeta, PartModel } from "./fcad-doc.ts";
+import type { SqlDb } from "./sql.ts";
+import type { PortableScene } from "../xde/types";
+
+export const CURRENT_BASIS = "current native main dd51dc381941af1631511a365c2d4802939118af";
+export const HISTORICAL_BASIS = "historical base 56b3c61ee3fa0c49534a48de090544cefc93ce83; not the current native format";
+
+const IDENTITY = JSON.stringify([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]]);
+const FCAD_APPLICATION_ID = 0x46434144;
+const EXTRUDE_FIELDS = new Set(["profile", "end_condition", "reversed", "operation", "previous"]);
+
+/** Damage to a contract this build understands. Never an editable document. */
+export class CurrentInvalid extends Error {
+  readonly code = "invalid" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "CurrentInvalid";
+  }
+}
+
+/** Structurally intact, but outside the editable plate/L slice. */
+export class CurrentUnsupported extends Error {
+  readonly code = "unsupported" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "CurrentUnsupported";
+  }
+}
+
+export type FormatFamily = "current" | "historical" | "unknown";
+
+type ObjectRow = {
+  id: Uint8Array;
+  kind: string;
+  name: string | null;
+  payload: Uint8Array;
+  hash: Uint8Array;
+  parent: Uint8Array | null;
+};
+
+type DepRow = { dependent: Uint8Array; dependency: Uint8Array; role: string };
+
+type CurrentContext = {
+  objects: ObjectRow[];
+  deps: DepRow[];
+  documentId: string;
+};
+
+export function detectFamily(db: SqlDb): FormatFamily {
+  const meta = columns(db, "meta");
+  const objects = columns(db, "objects");
+  if (!meta.length || !objects.length) return "unknown";
+  const historical = meta.includes("format_version") && objects.includes("schema_version");
+  const current = !meta.includes("format_version") && !objects.includes("schema_version") && !hasTable(db, "capabilities");
+  if (historical) return "historical";
+  if (current && meta.includes("document_id") && meta.includes("generator") && objects.includes("payload_hash")) return "current";
+  return "unknown";
+}
+
+/**
+ * Shared barrier for every current document. Called by the plate reader and
+ * by STEP extraction. Family detection is not this check.
+ */
+export function openCurrent(db: SqlDb): CurrentContext {
+  const integrity = textOfPragma(db, "integrity_check");
+  if (integrity !== "ok") throw new CurrentInvalid(`SQLite integrity_check: ${integrity}`);
+  const applicationId = numberOfPragma(db, "application_id");
+  if (applicationId !== FCAD_APPLICATION_ID) {
+    throw new CurrentInvalid(
+      `not a FerriteCAD document: application id is 0x${applicationId.toString(16).padStart(8, "0")}, expected 0x46434144`,
+    );
+  }
+  const meta = db.get("SELECT document_id FROM meta WHERE id = 1");
+  if (!meta) throw new CurrentInvalid("reading document metadata: Query returned no rows");
+  const documentId = requireUuidV7(asBlob(meta[0], "document_id"), "document_id");
+  const broken = db.all("PRAGMA foreign_key_check");
+  if (broken.length > 0) throw new CurrentInvalid("foreign_key_check failed");
+  const objects = loadObjects(db);
+  if (objects.some((row) => !hashMatches(row.payload, row.hash))) {
+    throw new CurrentInvalid("an object payload does not match its BLAKE3 hash");
+  }
+  if (objects.some((row) => !isUuidV7(row.id))) {
+    throw new CurrentInvalid("ObjectId must be an RFC 4122 UUIDv7");
+  }
+  checkTopology(db);
+  return { objects, deps: loadDeps(db), documentId };
+}
+
+export function readCurrent(db: SqlDb): FcadDocument {
+  try {
+    const ctx = openCurrent(db);
+    const kinds = ctx.objects.map((row) => row.kind);
+    if (kinds.includes("exchange.step.imported")) {
+      extractCurrentImport(db, ctx);
+      return {
+        ok: true,
+        status: "unsupported",
+        editable: false,
+        reason: "this current document is an imported STEP scene, not an editable plate",
+        summary: "imported scene",
+        basis: "current",
+      };
+    }
+    if (kinds.length !== 4 || !sameSet(kinds, ["datum.plane", "sketch", "feature.extrude", "body"])) {
+      throw new CurrentUnsupported(`current document objects ${kinds.join(", ")} are outside the plate/L slice`);
+    }
+    const model = plateModel(ctx);
+    return { ok: true, status: "editable", editable: true, model, summary: `current plate ${model.distanceSource}`, basis: "current" };
+  } catch (error) {
+    if (error instanceof CurrentUnsupported) {
+      return { ok: true, status: "unsupported", editable: false, reason: error.message, summary: "outside slice", basis: "current" };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, status: "invalid", error: message, basis: "current" };
+  }
+}
+
+export function readCurrentImport(db: SqlDb): { step: Uint8Array; meta: ImportedSourceMeta; scene: PortableScene | null } {
+  const ctx = openCurrent(db);
+  return extractCurrentImport(db, ctx);
+}
+
+function extractCurrentImport(db: SqlDb, ctx: CurrentContext): { step: Uint8Array; meta: ImportedSourceMeta; scene: PortableScene | null } {
+  const imports = ctx.objects.filter((row) => row.kind === "exchange.step.imported");
+  if (imports.length !== 1) {
+    throw new CurrentInvalid(imports.length === 0 ? "this document has no embedded STEP source" : `this document has ${imports.length} embedded STEP sources`);
+  }
+  const object = imports[0]!;
+  if (!hashMatches(object.payload, object.hash)) throw new CurrentInvalid("imported object payload does not match its BLAKE3 hash");
+  const root = decodeCbor(object.payload);
+  const type = textOf(field(root, "type"), "type");
+  if (type !== "exchange.step.imported") throw new CurrentInvalid(`type ${type} instead of exchange.step.imported`);
+  if (fieldPresent(root, "schema_version") || fieldPresent(root, "required_capabilities")) {
+    throw new CurrentInvalid("current envelope must not carry schema_version or required_capabilities");
+  }
+  const raw = field(root, "payload");
+  if (raw.type !== "bytes") throw new CurrentInvalid("inner payload is not a CBOR byte string");
+  let decoded;
+  try {
+    decoded = decodeImportedPayload(decodeCbor(raw.value), 3);
+  } catch (error) {
+    throw new CurrentInvalid(error instanceof Error ? error.message : String(error));
+  }
+  if (!decoded.scene) throw new CurrentInvalid("current imported scene has no keyed occurrences");
+  const source = db.get("SELECT format, bytes, content_hash, byte_len FROM imported_sources WHERE id = ?", [decoded.source]);
+  if (!source) throw new CurrentInvalid("imported source row is missing");
+  const format = String(source[0]);
+  const bytes = source[1] as Uint8Array;
+  const hash = source[2] as Uint8Array;
+  const byteLen = Number(source[3]);
+  if (format !== "exchange.step") throw new CurrentInvalid(`embedded source format ${format} is not STEP`);
+  if (byteLen !== bytes.byteLength || byteLen !== decoded.sourceByteLen) throw new CurrentInvalid("source byte_len does not match the stored STEP");
+  if (!bytesEqual(hash, decoded.sourceHash) || !bytesEqual(blake3(bytes), hash)) {
+    throw new CurrentInvalid("BLAKE3 imported_sources hash does not match");
+  }
+  const link = db.get("SELECT source_id FROM imported_source_refs WHERE object_id = ?", [object.id]);
+  if (!link || !bytesEqual(link[0] as Uint8Array, decoded.source)) {
+    throw new CurrentInvalid("imported source link does not match the payload");
+  }
+  const step = new Uint8Array(bytes.byteLength);
+  step.set(bytes);
+  return {
+    step,
+    meta: {
+      format,
+      byteLen,
+      blobBytes: step.byteLength,
+      contentHashHex: blake3Hex(step),
+      hashOk: true,
+      objectName: object.name,
+      sourceName: decoded.sourceName,
+      sourceByteLen: byteLen,
+      sourceId: uuidOf(decoded.source),
+      payloadSourceId: uuidOf(decoded.source),
+      refSourceId: uuidOf(decoded.source),
+      sourceLinkOk: true,
+      hasStoredScene: true,
+    },
+    scene: decoded.scene,
+  };
+}
+
+function plateModel(ctx: CurrentContext): PartModel {
+  const plane = mustKind(ctx.objects, "datum.plane");
+  const sketch = mustKind(ctx.objects, "sketch");
+  const extrude = mustKind(ctx.objects, "feature.extrude");
+  const body = mustKind(ctx.objects, "body");
+  const planeInner = innerOf(plane.payload, "datum.plane");
+  const sketchInner = innerOf(sketch.payload, "sketch");
+  const extrudeInner = innerOf(extrude.payload, "feature.extrude");
+  const bodyInner = innerOf(body.payload, "body");
+
+  requireField(sketchInner, "constraints", "sketch");
+  if (!Array.isArray(sketchInner.constraints)) throw new CurrentInvalid("constraints: expected array");
+  for (const item of sketchInner.constraints) {
+    if (!item || typeof item !== "object" || Array.isArray(item) || item instanceof Uint8Array) {
+      throw new CurrentInvalid("invalid type: null, expected map for constraint");
+    }
+  }
+  if (sketchInner.constraints.length > 0) {
+    // Structurally present constraints are outside the solver-free slice.
+    // A null or non-map element already failed above as invalid.
+    throw new CurrentUnsupported("sketch constraints are outside this slice");
+  }
+  for (const curve of asArray(sketchInner.curves, "curves")) {
+    requireField(asRecord(curve, "curve"), "construction", "curve");
+  }
+  for (const key of Object.keys(extrudeInner)) {
+    if (!EXTRUDE_FIELDS.has(key)) throw new CurrentInvalid(`unknown field ${key} on feature.extrude`);
+  }
+  requireField(extrudeInner, "reversed", "feature.extrude");
+  // previous is Option<ObjectId>: absence and null are both the NewBody case.
+  // A present non-null value is not this slice.
+
+  let decodedSketch;
+  let decodedExtrude;
+  let decodedPlane;
+  let decodedBody;
+  try {
+    decodedSketch = decodeSketch(sketchInner);
+    decodedExtrude = decodeExtrude(extrudeInner);
+    decodedPlane = decodePlane(planeInner);
+    decodedBody = decodeBody(bodyInner);
+  } catch (error) {
+    throw new CurrentInvalid(error instanceof Error ? error.message : String(error));
+  }
+
+  const planeId = asBlob(sketchInner.plane, "sketch.plane");
+  const planeTarget = objectById(ctx.objects, planeId);
+  if (!planeTarget) throw new CurrentInvalid(`sketch refers to missing object ${uuidOf(planeId)}`);
+  if (planeTarget.kind !== "datum.plane") {
+    throw new CurrentInvalid(`sketch expects ${uuidOf(planeId)} to be a datum.plane, found ${planeTarget.kind}`);
+  }
+  if (!hasEdge(ctx.deps, sketch.id, planeTarget.id, "plane")) {
+    throw new CurrentInvalid(`sketch ${uuidOf(sketch.id)} refers to ${uuidOf(planeId)} but no plane dependency records it`);
+  }
+
+  const profileId = asBlob(extrudeInner.profile, "extrude.profile");
+  const profileTarget = objectById(ctx.objects, profileId);
+  if (!profileTarget) throw new CurrentInvalid(`extrude refers to missing object ${uuidOf(profileId)}`);
+  if (profileTarget.kind !== "sketch") {
+    throw new CurrentInvalid(`extrude expects ${uuidOf(profileId)} to be a sketch, found ${profileTarget.kind}`);
+  }
+  if (!hasEdge(ctx.deps, extrude.id, profileTarget.id, "profile")) {
+    throw new CurrentInvalid(`extrude ${uuidOf(extrude.id)} refers to ${uuidOf(profileId)} but no profile dependency records it`);
+  }
+
+  const tipId = asBlob(bodyInner.tip_feature, "body.tip_feature");
+  const tipTarget = objectById(ctx.objects, tipId);
+  if (!tipTarget) throw new CurrentInvalid(`body refers to missing tip ${uuidOf(tipId)}`);
+  if (tipTarget.kind !== "feature.extrude") {
+    throw new CurrentInvalid(`body expects tip ${uuidOf(tipId)} to be a feature.extrude, found ${tipTarget.kind}`);
+  }
+  if (!hasEdge(ctx.deps, body.id, tipTarget.id, "body_tip")) {
+    throw new CurrentInvalid(`body ${uuidOf(body.id)} refers to tip feature ${uuidOf(tipId)} but no body_tip dependency records it`);
+  }
+
+  if (JSON.stringify(decodedPlane.rows) !== IDENTITY) throw new CurrentUnsupported("plane is not identity XY");
+  if (decodedExtrude.operation !== "new_body" || decodedExtrude.endKind !== "blind" || decodedExtrude.reversed || decodedExtrude.previous) {
+    throw new CurrentUnsupported("extrude is not Blind +Z NewBody");
+  }
+  if (!decodedBody.tip || uuidOf(decodedBody.tip) !== uuidOf(extrude.id)) {
+    throw new CurrentInvalid("body tip is not the extrude");
+  }
+  const curves = decodedSketch.curves;
+  return {
+    documentId: ctx.documentId,
+    planeId: uuidOf(plane.id),
+    planeName: plane.name ?? "XY",
+    sketchId: uuidOf(sketch.id),
+    sketchName: sketch.name ?? "Sketch",
+    curves,
+    area: signedArea(curves),
+    extrudeId: uuidOf(extrude.id),
+    extrudeName: extrude.name ?? "Extrude",
+    distanceSource: decodedExtrude.distanceSource ?? "",
+    distanceMm: decodedExtrude.distanceValue ?? Number.NaN,
+    bodyId: uuidOf(body.id),
+    bodyName: body.name ?? "Body",
+  };
+}
+
+function checkTopology(db: SqlDb) {
+  if (!hasTable(db, "topology_refs")) return;
+  const rows = db.all("SELECT id, payload, payload_hash FROM topology_refs");
+  for (const row of rows) {
+    const payload = asBlob(row[1], "topology payload");
+    const hash = asBlob(row[2], "topology payload_hash");
+    if (!hashMatches(payload, hash)) {
+      throw new CurrentInvalid(`topology reference ${uuidOf(asBlob(row[0], "topology id"))} does not match its stored hash`);
+    }
+    try {
+      const root = decodeCbor(payload);
+      if (textOf(field(root, "type"), "type") !== "topology_ref") throw new Error("topology type is not topology_ref");
+      const raw = field(root, "payload");
+      if (raw.type !== "bytes") throw new Error("topology payload is not embedded CBOR");
+      decodeTopology(cborToValue(decodeCbor(raw.value)));
+    } catch (error) {
+      throw new CurrentInvalid(error instanceof Error ? error.message : String(error));
+    }
+  }
+}
+
+function innerOf(payload: Uint8Array, expected: string): Record<string, unknown> {
+  const root = decodeCbor(payload);
+  if (textOf(field(root, "type"), "type") !== expected) throw new CurrentInvalid(`type is not ${expected}`);
+  if (fieldPresent(root, "schema_version")) throw new CurrentInvalid("current envelope must not carry schema_version");
+  const raw = field(root, "payload");
+  if (raw.type !== "bytes") throw new CurrentInvalid("payload is not embedded CBOR");
+  return asRecord(cborToValue(decodeCbor(raw.value)), expected);
+}
+
+function loadObjects(db: SqlDb): ObjectRow[] {
+  return db.all("SELECT id, kind, name, payload, payload_hash, parent_id FROM objects ORDER BY ordinal, rowid").map((row) => ({
+    id: asBlob(row[0], "id"),
+    kind: String(row[1]),
+    name: row[2] == null ? null : String(row[2]),
+    payload: asBlob(row[3], "payload"),
+    hash: asBlob(row[4], "payload_hash"),
+    parent: row[5] == null ? null : asBlob(row[5], "parent_id"),
+  }));
+}
+
+function loadDeps(db: SqlDb): DepRow[] {
+  if (!hasTable(db, "deps")) return [];
+  return db.all("SELECT dependent_id, dependency_id, role FROM deps").map((row) => ({
+    dependent: asBlob(row[0], "dependent_id"),
+    dependency: asBlob(row[1], "dependency_id"),
+    role: String(row[2]),
+  }));
+}
+
+function mustKind(objects: ObjectRow[], kind: string): ObjectRow {
+  const found = objects.find((row) => row.kind === kind);
+  if (!found) throw new CurrentInvalid(`missing ${kind}`);
+  return found;
+}
+
+function objectById(objects: ObjectRow[], id: Uint8Array): ObjectRow | undefined {
+  return objects.find((row) => bytesEqual(row.id, id));
+}
+
+function hasEdge(deps: DepRow[], dependent: Uint8Array, dependency: Uint8Array, role: string): boolean {
+  return deps.some((row) => row.role === role && bytesEqual(row.dependent, dependent) && bytesEqual(row.dependency, dependency));
+}
+
+function columns(db: SqlDb, table: string): string[] {
+  if (!hasTable(db, table)) return [];
+  return db.all(`PRAGMA table_info(${table})`).map((row) => String(row[1]));
+}
+
+function hasTable(db: SqlDb, table: string): boolean {
+  const row = db.get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [table]);
+  return Boolean(row);
+}
+
+function fieldPresent(node: { type: string; entries?: { key: { type: string; value?: unknown } }[] }, key: string): boolean {
+  return node.type === "map" && Boolean(node.entries?.some((entry) => entry.key.type === "text" && entry.key.value === key));
+}
+
+function requireField(record: Record<string, unknown>, key: string, label: string) {
+  if (!Object.prototype.hasOwnProperty.call(record, key)) throw new CurrentInvalid(`missing field ${key} on ${label}`);
+}
+
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value) || value instanceof Uint8Array) throw new CurrentInvalid(`${label}: expected map`);
+  return value as Record<string, unknown>;
+}
+
+function asArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) throw new CurrentInvalid(`${label}: expected array`);
+  return value;
+}
+
+function asBlob(value: unknown, label: string): Uint8Array {
+  if (!(value instanceof Uint8Array)) throw new CurrentInvalid(`${label}: expected bytes`);
+  return value;
+}
+
+function sameSet(got: string[], expected: string[]): boolean {
+  return got.length === expected.length && expected.every((item) => got.includes(item));
+}
+
+function signedArea(curves: SketchCurve[]): number {
+  let area = 0;
+  for (const curve of curves) area += curve.start[0] * curve.end[1] - curve.end[0] * curve.start[1];
+  return Math.abs(area) / 2;
+}
+
+function textOfPragma(db: SqlDb, name: string): string {
+  const row = db.get(`PRAGMA ${name}`);
+  const value = row?.[0];
+  if (typeof value !== "string") throw new CurrentInvalid(`${name}: expected text`);
+  return value;
+}
+
+function numberOfPragma(db: SqlDb, name: string): number {
+  const row = db.get(`PRAGMA ${name}`);
+  const value = row?.[0];
+  if (typeof value !== "number" && typeof value !== "bigint") throw new CurrentInvalid(`${name}: expected number`);
+  return Number(value);
+}

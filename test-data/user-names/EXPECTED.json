@@ -1,0 +1,28 @@
+{
+  "fcad": {
+    "file": "unicode-user-names.fcad",
+    "names": {
+      "datum.plane": "Плоскость Ω",
+      "sketch": "Эскиз 日本",
+      "feature.extrude": "Моя высота",
+      "body": "Деталь π"
+    },
+    "initialHeight": 10,
+    "initialVolume": 24000,
+    "editHeight": 10.1,
+    "editedVolume": 24240
+  },
+  "legacy": {
+    "file": "legacy-russian-user.ferrite.json",
+    "documentName": "Мой фланец Ω",
+    "sketchName": "Эскиз заказчика",
+    "featureName": "Ступица заказчика",
+    "countParameter": {
+      "id": "boltN",
+      "name": "Болтов",
+      "value": 6,
+      "unit": "шт"
+    }
+  },
+  "policy": "English application text; document names stay unchanged. Internal legacy unit шт must retain its integer-count meaning."
+}
