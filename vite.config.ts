@@ -25,7 +25,9 @@ function wasmMimePreviewPlugin(): Plugin {
         }
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/wasm");
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.setHeader("Cache-Control", pathOnly.startsWith("/document-probe/")
+          ? "public, max-age=0, must-revalidate"
+          : "public, max-age=31536000, immutable");
         createReadStream(file).pipe(res);
       });
     },

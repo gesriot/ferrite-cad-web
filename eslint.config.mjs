@@ -15,6 +15,8 @@ export default tseslint.config(
       ".nitro/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
+      // Committed compiler output, rebuilt and checked by the WASM probe job.
+      "public/document-probe/kernel/document.mjs",
       // Accepted placement arithmetic. Operation order must not change for the
       // type checker; the modules are excluded from checkJs via @ts-nocheck and
       // from lint so that exclusion stays narrow rather than disabling the

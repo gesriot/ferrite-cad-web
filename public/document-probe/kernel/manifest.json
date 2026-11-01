@@ -1,0 +1,35 @@
+{
+  "nativeCommit": "1b645299b206f3f87e9d3d9959428d2b245d6219",
+  "rust": "1.96.0",
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "emsdk": "4.0.23",
+  "emcc": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 4.0.23 (7a5d93b50f6a3a35e85a0d2fc9e667b8498e6aed)",
+  "target": "wasm32-unknown-emscripten",
+  "filesystem": "MEMFS",
+  "remappedPaths": [
+    "/workspace",
+    "/cargo",
+    "/rust-toolchain"
+  ],
+  "flags": [
+    "-sMODULARIZE=1",
+    "-sEXPORT_ES6=1",
+    "-sENVIRONMENT=web,worker,node",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sEXPORTED_RUNTIME_METHODS=HEAPU8",
+    "-sEXPORTED_FUNCTIONS=_fcad_open,_fcad_set_expression,_malloc,_free,_main",
+    "-sNO_EXIT_RUNTIME=1"
+  ],
+  "files": {
+    "document.mjs": {
+      "sha256": "e88bb7540c279e4f102283349fa4ea3ce3478a0641569725718ec49dacdfdfe2",
+      "bytes": 68863,
+      "gzipBytes": 18965
+    },
+    "document.wasm": {
+      "sha256": "cb7fe98f1c92d4ac1771aef0e612fc4922144bde7646f7086cbfb175d137d45e",
+      "bytes": 1893230,
+      "gzipBytes": 755124
+    }
+  }
+}

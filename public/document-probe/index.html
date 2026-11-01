@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FerriteCAD document WASM probe</title>
+  <style>
+    body {
+      font: 16px system-ui;
+      max-width: 900px;
+      margin: 32px auto;
+      padding: 0 20px;
+      color: #e6edf3;
+      background: #101820;
+    }
+    label,
+    button,
+    input,
+    select {
+      margin: 8px 8px 8px 0;
+    }
+    input,
+    button,
+    select {
+      padding: 8px;
+      font: inherit;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #1b2733;
+      padding: 16px;
+    }
+    a {
+      color: #7dcfff;
+    }
+  </style>
+  <h1>Document WASM probe</h1>
+  <p>
+    Experimental document-only Rust module. No geometry rebuild in this Worker. The CAD editor is
+    unchanged.
+  </p>
+  <p id="flag"></p>
+  <fieldset id="controls" disabled>
+    <legend>Local FCAD document</legend>
+    <label>Open FCAD <input id="file" type="file" accept=".fcad" /></label><br />
+    <label
+      >Expression
+      <select id="slot" disabled></select
+    ></label>
+    <label>Value (native units) <input id="value" type="number" step="any" value="16" /></label>
+    <button id="edit" disabled>Apply expression</button>
+    <button id="download" disabled>Download FCAD</button>
+    <button id="end">End probe</button>
+  </fieldset>
+  <pre id="result" aria-live="polite">No module or document loaded.</pre>
+  <script type="module" src="./page.mjs"></script>
+</html>
