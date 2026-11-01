@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite dev --host 0.0.0.0 --port 8080",
-    "build": "vite build && node scripts/wasm-mime.mjs",
+    "dev:document-probe": "vite --config vite.document-probe.config.ts",
+    "build": "vite build && vite build --config vite.document-probe.config.ts && node scripts/wasm-mime.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "preview:restart": "node scripts/preview.mjs restart",
@@ -24,8 +25,9 @@
     "format": "prettier --write .",
     "test:placement": "node --test src/xde/placement-math/f64.test.mjs",
     "test:contract": "node --experimental-strip-types --test src/occt/current-contract.test.ts src/occt/file-limits.test.ts",
-    "check": "npm run typecheck && npm run lint && npm test && npm run test:kernel && npm run test:fcad && npm run test:contract && npm run test:xde && npm run test:placement",
-    "test:kernel": "node --experimental-strip-types --test src/lib/cad/kernel.test.ts"
+    "check": "npm run typecheck && npm run lint && npm test && npm run test:kernel && npm run test:fcad && npm run test:contract && npm run test:xde && npm run test:placement && npm run test:document",
+    "test:kernel": "node --experimental-strip-types --test src/lib/cad/kernel.test.ts",
+    "test:document": "node --experimental-strip-types --test src/document/transport.test.ts src/document/session.test.ts src/document/document-wasm.test.ts src/document-probe/controller.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.7.0",

@@ -1,0 +1,4 @@
+# These inputs and runtime files are compared by bytes/hash, including on Windows.
+*.step -text
+*.stp -text
+public/document-probe/kernel/document.mjs -text

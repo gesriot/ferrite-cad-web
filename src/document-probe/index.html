@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FerriteCAD document WASM probe</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      body {
+        font: 16px system-ui;
+        max-width: 900px;
+        margin: 32px auto;
+        padding: 0 20px;
+        color: #e6edf3;
+        background: #101820;
+      }
+      label,
+      button,
+      input,
+      select {
+        margin: 8px 8px 8px 0;
+      }
+      input,
+      button,
+      select {
+        padding: 8px;
+        font: inherit;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #1b2733;
+        padding: 16px;
+      }
+      a {
+        color: #7dcfff;
+      }
+      #document {
+        margin: 8px 0;
+        font-weight: 600;
+      }
+      #slot-detail {
+        display: block;
+        margin: 0 0 8px;
+        color: #9fb3c8;
+        overflow-wrap: anywhere;
+      }
+      dialog {
+        max-width: 420px;
+        color: #e6edf3;
+        background: #1b2733;
+        border: 1px solid #3b4d5f;
+        border-radius: 6px;
+      }
+      dialog::backdrop {
+        background: rgb(0 0 0 / 60%);
+      }
+      dialog form {
+        text-align: right;
+      }
+      dialog p {
+        margin: 0 0 8px;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Document WASM probe</h1>
+    <p>
+      Experimental document-only Rust module. No geometry rebuild in this Worker. The CAD editor is
+      unchanged.
+    </p>
+    <p>
+      An applied expression is a document edit that Rust validates and rewrites. The solid is not
+      rebuilt, so a downloaded file has not been checked against its geometry.
+    </p>
+    <p id="flag"></p>
+    <fieldset id="controls" disabled>
+      <legend>Local FCAD document</legend>
+      <label>Open FCAD <input id="file" type="file" accept=".fcad" /></label><br />
+      <label>Expression <select id="slot" disabled></select></label>
+      <span id="slot-detail"></span>
+      <label>Value (native units) <input id="value" type="number" step="any" value="16" /></label>
+      <button id="edit" disabled>Apply expression</button>
+      <button id="download" disabled>Download FCAD</button>
+      <button id="end">End probe</button>
+    </fieldset>
+    <p id="document" aria-live="polite">No document held.</p>
+    <pre id="result" aria-live="polite">No module or document loaded.</pre>
+    <dialog id="discard">
+      <form method="dialog">
+        <p id="discard-text"></p>
+        <button value="cancel" autofocus>Cancel</button>
+        <button value="discard">Discard</button>
+      </form>
+    </dialog>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

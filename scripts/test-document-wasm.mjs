@@ -3,12 +3,19 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { createDocumentModule } from "../public/document-probe/transport.mjs";
+import { createDocumentAbi } from "../src/document/abi.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const artifact = join(root, "public/document-probe/kernel");
+// The same ABI framing the browser Worker runs; only the source of the module differs.
+const createDocumentModule = ({ wasmBinary }) =>
+  createDocumentAbi(async () => {
+    const { default: create } = await import(pathToFileURL(join(artifact, "document.mjs")).href);
+    return create({ wasmBinary });
+  });
 const host =
   process.env.DOCUMENT_HOST ??
   resolve(
@@ -77,7 +84,6 @@ const report = {
   payloadRoundtripDifferences: [],
 };
 try {
-  const artifact = join(root, "public/document-probe/kernel");
   const manifest = JSON.parse(readFileSync(join(artifact, "manifest.json")));
   for (const [name, expected] of Object.entries(manifest.files)) {
     const bytes = readFileSync(join(artifact, name));
