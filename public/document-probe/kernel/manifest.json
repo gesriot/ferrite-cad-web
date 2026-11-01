@@ -1,7 +1,7 @@
 {
   "nativeCommit": "1b645299b206f3f87e9d3d9959428d2b245d6219",
-  "rust": "1.96.0",
-  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "rust": "1.99.1",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
   "emsdk": "4.0.23",
   "emcc": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 4.0.23 (7a5d93b50f6a3a35e85a0d2fc9e667b8498e6aed)",
   "target": "wasm32-unknown-emscripten",
@@ -22,14 +22,14 @@
   ],
   "files": {
     "document.mjs": {
-      "sha256": "e88bb7540c279e4f102283349fa4ea3ce3478a0641569725718ec49dacdfdfe2",
+      "sha256": "a43359e7c9baeea3f10985089ea0c260871781aefe4fd5f2765de66dc8f894d3",
       "bytes": 68863,
-      "gzipBytes": 18965
+      "gzipBytes": 18964
     },
     "document.wasm": {
-      "sha256": "cb7fe98f1c92d4ac1771aef0e612fc4922144bde7646f7086cbfb175d137d45e",
-      "bytes": 1893230,
-      "gzipBytes": 755124
+      "sha256": "9ac64ccb11c683d3f706a508c350eccedd8e68ea08fe109b21c5770a288c8451",
+      "bytes": 1829293,
+      "gzipBytes": 749717
     }
   }
 }

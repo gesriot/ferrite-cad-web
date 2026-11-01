@@ -22,11 +22,11 @@ stay in Rust. A document edit here is `EditChange::constant` +
 `Document::write_changes`, not a geometry transaction: nothing is rebuilt, so a
 downloaded file has not been checked against its geometry.
 
-Activate emsdk **4.0.23**, install Rust **1.96.0** with target
+Activate emsdk **4.0.23**, install Rust **1.99.1** with target
 `wasm32-unknown-emscripten`, then run from the repository root:
 
 ```sh
-cargo +1.96.0 build --locked --release --manifest-path wasm/document/Cargo.toml
+cargo +1.99.1 build --locked --release --manifest-path wasm/document/Cargo.toml
 node scripts/build-document-wasm.mjs
 node --experimental-strip-types scripts/test-document-wasm.mjs
 npm run build

@@ -11,7 +11,7 @@ const out = resolve(
   process.env.DOCUMENT_WASM_OUTPUT ?? resolve(root, "public/document-probe/kernel"),
 );
 const target = resolve(process.env.CARGO_TARGET_DIR ?? resolve(root, "wasm/document/target"));
-const rust = "1.96.0";
+const rust = "1.99.1";
 const emsdk = "4.0.23";
 const run = (command, args) => execFileSync(command, args, { cwd: root, encoding: "utf8" }).trim();
 const emcc = run("emcc", ["--version"]);

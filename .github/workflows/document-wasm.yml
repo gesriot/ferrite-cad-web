@@ -18,13 +18,13 @@ jobs:
           node-version: 22
       - name: Install pinned toolchains
         run: |
-          rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-emscripten
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-emscripten
           git clone --no-checkout https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
           git -C "$RUNNER_TEMP/emsdk" checkout --detach c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56
           "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
           "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
       - name: Build the same facade for the native host
-        run: cargo +1.96.0 build --locked --release --manifest-path wasm/document/Cargo.toml
+        run: cargo +1.99.1 build --locked --release --manifest-path wasm/document/Cargo.toml
       - name: Check committed artifact against native host
         run: node --experimental-strip-types scripts/test-document-wasm.mjs
       - name: Rebuild and measure byte reproducibility
