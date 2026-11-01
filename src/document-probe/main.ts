@@ -97,6 +97,7 @@ let prefilled: DocumentSnapshot | undefined;
 function render(): void {
   const snapshot = session.snapshot;
   const previous = slotSelect.value;
+  const fresh = snapshot !== null && snapshot.revision === 1 && snapshot !== prefilled;
   const slots = snapshot?.inspection.expression_slots ?? [];
   slotSelect.replaceChildren(
     ...slots.map((slot, index) => {
@@ -106,13 +107,14 @@ function render(): void {
       return option;
     }),
   );
-  if (Number(previous) < slots.length) slotSelect.value = previous;
+  // A new document starts at its first slot; a refreshed one keeps the user's choice.
+  if (!fresh && previous !== "" && Number(previous) < slots.length) slotSelect.value = previous;
   slotSelect.disabled = editButton.disabled = slots.length === 0;
   downloadButton.disabled = !snapshot;
   documentLine.textContent = snapshot
     ? `Document: ${snapshot.name} · revision ${snapshot.revision} · ${snapshot.dirty ? "unsaved changes" : "unchanged since opened"}`
     : "No document held.";
-  if (snapshot && snapshot.revision === 1 && snapshot !== prefilled) {
+  if (snapshot && fresh) {
     prefilled = snapshot;
     const first = snapshot.inspection.expression_slots[0];
     if (first) valueInput.value = String(first.expression.value);
