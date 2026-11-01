@@ -26,7 +26,7 @@ jobs:
       - name: Build the same facade for the native host
         run: cargo +1.96.0 build --locked --release --manifest-path wasm/document/Cargo.toml
       - name: Check committed artifact against native host
-        run: node scripts/test-document-wasm.mjs
+        run: node --experimental-strip-types scripts/test-document-wasm.mjs
       - name: Rebuild and measure byte reproducibility
         run: |
           cp public/document-probe/kernel/manifest.json "$RUNNER_TEMP/committed-manifest.json"
@@ -43,7 +43,7 @@ jobs:
       # Cross-host toolchain byte identity is measured, not assumed. A different
       # artifact must still pass the entire semantic/byte payload parity corpus.
       - name: Check rebuilt artifact against native host
-        run: node scripts/test-document-wasm.mjs
+        run: node --experimental-strip-types scripts/test-document-wasm.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
