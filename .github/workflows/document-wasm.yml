@@ -1,0 +1,51 @@
+name: Document WASM probe
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/wasm/document/target
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pinned toolchains
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-emscripten
+          git clone --no-checkout https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          git -C "$RUNNER_TEMP/emsdk" checkout --detach c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
+      - name: Build the same facade for the native host
+        run: cargo +1.96.0 build --locked --release --manifest-path wasm/document/Cargo.toml
+      - name: Check committed artifact against native host
+        run: node scripts/test-document-wasm.mjs
+      - name: Rebuild and measure byte reproducibility
+        run: |
+          cp public/document-probe/kernel/manifest.json "$RUNNER_TEMP/committed-manifest.json"
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          node scripts/build-document-wasm.mjs
+          node --input-type=module <<'JS'
+          import {readFileSync, writeFileSync} from 'node:fs';
+          const old = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/committed-manifest.json'));
+          const next = JSON.parse(readFileSync('public/document-probe/kernel/manifest.json'));
+          const result = Object.fromEntries(Object.keys(old.files).map(name => [name, { committed: old.files[name].sha256, rebuilt: next.files[name].sha256, equal: old.files[name].sha256 === next.files[name].sha256 }]));
+          writeFileSync('artifacts/document-wasm/reproducibility.json', JSON.stringify(result, null, 2));
+          console.log(result);
+          JS
+      # Cross-host toolchain byte identity is measured, not assumed. A different
+      # artifact must still pass the entire semantic/byte payload parity corpus.
+      - name: Check rebuilt artifact against native host
+        run: node scripts/test-document-wasm.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: document-wasm-parity
+          path: artifacts/document-wasm/
