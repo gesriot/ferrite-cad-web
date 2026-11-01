@@ -102,6 +102,32 @@ test("the caller's buffer survives the call and the Worker receives its own copy
   await second;
 });
 
+test("a Buffer view is copied without transferring its surrounding allocation", async () => {
+  const { workers, transport } = harness();
+  const backing = Buffer.alloc(16, 90);
+  const bytes = backing.subarray(4, 7);
+  bytes.set([1, 2, 3]);
+  const pending = transport.open(bytes);
+  assert.equal(backing.byteLength, 16);
+  assert.deepEqual([...new Uint8Array(workers[0]!.posted[0]!.bytes)], [1, 2, 3]);
+  workers[0]!.reply(0, inspectionJson());
+  await pending;
+});
+
+test("a queued edit owns the slot as it was when requested", async () => {
+  const { workers, transport } = harness();
+  const first = transport.open(fcad());
+  const slot = { kind: "fixed_x", constraint: "original" };
+  const second = transport.setExpression(fcad(), { ...change, slot });
+  slot.constraint = "different";
+  workers[0]!.reply(0, inspectionJson());
+  await first;
+  const posted = workers[0]!.posted[1]!;
+  assert.equal(posted.operation === "set_expression" && posted.request.slot.constraint, "original");
+  workers[0]!.reply(1, refusalJson());
+  await second;
+});
+
 test("setExpression sends only the fields Rust accepts", async () => {
   const { workers, transport } = harness();
   const pending = transport.setExpression(fcad(), { ...change, extra: "never sent" } as ExpressionChange);

@@ -52,6 +52,8 @@ export type TransitionOutcome =
 
 export type OpenOutcome =
   | TransitionOutcome
+  /** Publication was declined; the previously accepted document is untouched. */
+  | { readonly status: "cancelled" }
   /** The file could not be read, so Rust was never asked. */
   | { readonly status: "read-failed"; readonly error: unknown };
 
@@ -118,12 +120,17 @@ export class DocumentSession {
    * before `read()` is awaited, so a newer open or `end()` issued while the
    * file is still being read wins even if this read finishes last.
    */
-  async open(name: string, read: () => Promise<Uint8Array>): Promise<OpenOutcome> {
+  async open(
+    name: string,
+    read: () => Promise<Uint8Array>,
+    authorizeReplacement?: (current: DocumentSnapshot | null) => Promise<boolean>,
+  ): Promise<OpenOutcome> {
     const intent = ++this.#intent;
     const live = () => intent === this.#intent;
     let bytes: Uint8Array<ArrayBuffer>;
     try {
-      bytes = (await read()).slice();
+      // Uint8Array subclasses such as Node Buffer may implement slice as a view.
+      bytes = new Uint8Array(await read());
     } catch (error) {
       return live() ? { status: "read-failed", error } : { status: "superseded" };
     }
@@ -140,6 +147,18 @@ export class DocumentSession {
     if (!reply.ok) return { status: "refused", refusal: reply.refusal, timing: reply.timing };
     if (!reply.inspection.validation.ok) {
       return { status: "invalid", inspection: reply.inspection, timing: reply.timing };
+    }
+    if (authorizeReplacement) {
+      // Reading and validation can take time. Permission to replace revision N
+      // cannot discard an edit accepted meanwhile as revision N+1. Check again
+      // after each asynchronous decision, then publish without another await.
+      for (;;) {
+        const current = this.snapshot;
+        const allowed = await authorizeReplacement(current);
+        if (!live()) return { status: "superseded" };
+        if (!allowed) return { status: "cancelled" };
+        if (this.snapshot === current) break;
+      }
     }
     return {
       status: "accepted",
@@ -173,7 +192,7 @@ export class DocumentSession {
       }
       const snapshot = this.#accept(
         current.snapshot.name,
-        reply.bytes.slice(),
+        new Uint8Array(reply.bytes),
         current.opened,
         current.snapshot.revision + 1,
         reply.inspection,
@@ -206,7 +225,7 @@ export class DocumentSession {
       revision,
       dirty: !sameBytes(bytes, opened),
       byteLength: bytes.length,
-      inspection: deepFreeze(inspection),
+      inspection: deepFreeze(structuredClone(inspection)),
     });
     this.#accepted = { token, bytes, opened, snapshot };
     return snapshot;

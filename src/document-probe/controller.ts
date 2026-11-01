@@ -10,7 +10,7 @@
  * again rather than silently covering a revision the user never saw.
  */
 import type { NativeSlot } from "../document/protocol.ts";
-import type { DocumentSession, EditOutcome, OpenOutcome } from "../document/session.ts";
+import type { DocumentSession, DocumentSnapshot, EditOutcome, OpenOutcome } from "../document/session.ts";
 import { assertCadFileSize, readCadFile } from "../occt/file-limits.ts";
 
 export interface ProbeFile {
@@ -53,9 +53,18 @@ export class ProbeController {
       return { kind: "rejected", message: error instanceof Error ? error.message : String(error) };
     }
     const request = ++this.#request;
-    if (!(await this.#mayDiscard(request, "Opening another file"))) return { kind: "cancelled" };
+    const permission = await this.#mayDiscard(request, "Opening another file");
+    if (!permission || request !== this.#request) return { kind: "cancelled" };
     // The session registers this open before the file is read.
-    return { kind: "open", outcome: await this.#session.open(file.name, () => readCadFile(file)) };
+    const outcome = await this.#session.open(file.name, () => readCadFile(file), async (current) => {
+      if (request !== this.#request) return false;
+      if (current === permission.snapshot || !current?.dirty) return true;
+      const allowed = await this.#ports.confirmDiscard(
+        `Opening another file will discard the unsaved changes to ${current.name}.`,
+      );
+      return allowed && request === this.#request;
+    });
+    return { kind: "open", outcome };
   }
 
   async applyExpression(slot: NativeSlot, value: number): Promise<ProbeResult> {
@@ -80,9 +89,14 @@ export class ProbeController {
 
   async end(): Promise<ProbeResult> {
     const request = ++this.#request;
-    if (!(await this.#mayDiscard(request, "Ending the probe"))) return { kind: "cancelled" };
-    this.#session.end();
-    return { kind: "ended" };
+    for (;;) {
+      const permission = await this.#mayDiscard(request, "Ending the probe");
+      if (!permission || request !== this.#request) return { kind: "cancelled" };
+      // An edit can resolve between #mayDiscard and this continuation too.
+      if (this.#session.snapshot !== permission.snapshot) continue;
+      this.#session.end();
+      return { kind: "ended" };
+    }
   }
 
   /** Leaving the page: nothing can be asked, so release the Worker unconditionally. */
@@ -91,15 +105,18 @@ export class ProbeController {
     this.#session.end();
   }
 
-  async #mayDiscard(request: number, action: string): Promise<boolean> {
+  async #mayDiscard(
+    request: number,
+    action: string,
+  ): Promise<{ snapshot: DocumentSnapshot | null } | null> {
     for (;;) {
       const shown = this.#session.snapshot;
-      if (!shown?.dirty) return request === this.#request;
+      if (!shown?.dirty) return request === this.#request ? { snapshot: shown } : null;
       const discard = await this.#ports.confirmDiscard(
         `${action} will discard the unsaved changes to ${shown.name}.`,
       );
-      if (!discard || request !== this.#request) return false;
-      if (this.#session.snapshot === shown) return true;
+      if (!discard || request !== this.#request) return null;
+      if (this.#session.snapshot === shown) return { snapshot: shown };
     }
   }
 }

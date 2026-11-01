@@ -97,6 +97,7 @@ let prefilled: DocumentSnapshot | undefined;
 function render(): void {
   const snapshot = session.snapshot;
   const previous = slotSelect.value;
+  if (!snapshot) prefilled = undefined;
   const fresh = snapshot !== null && snapshot.revision === 1 && snapshot !== prefilled;
   const slots = snapshot?.inspection.expression_slots ?? [];
   slotSelect.replaceChildren(
@@ -146,6 +147,8 @@ function describe(outcome: ProbeResult): unknown {
   }
   const inner = outcome.outcome;
   switch (inner.status) {
+    case "cancelled":
+      return { status: "cancelled", note: `Nothing changed. ${held()}` };
     case "accepted": {
       const { objects, ...rest } = inner.snapshot.inspection;
       return {

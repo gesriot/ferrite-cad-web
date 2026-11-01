@@ -189,6 +189,42 @@ test("the open intent is registered before the file is awaited", async () => {
   await settled(second);
 });
 
+test("replacement permission is bound to the revision present at publication", async () => {
+  const { session, transport } = newSession();
+  await openAccepted(session, transport);
+  const decision = deferred<boolean>();
+  let decisions = 0;
+  const opening = session.open("other.fcad", async () => bytesOf(9), async () => {
+    decisions += 1;
+    return decisions === 1 ? decision.promise : false;
+  });
+  await tick();
+  transport.calls.at(-1)!.resolve(readOk());
+  await tick();
+  await edit(session, transport, editOk(bytesOf(7)));
+  const kept = session.snapshot;
+  decision.resolve(true);
+  assert.equal((await opening).status, "cancelled");
+  assert.equal(decisions, 2);
+  assert.equal(session.snapshot, kept);
+  assert.deepEqual([...session.copyBytes()!], [7]);
+});
+
+test("End supersedes an open waiting for replacement permission", async () => {
+  const { session, transport } = newSession();
+  await openAccepted(session, transport);
+  const decision = deferred<boolean>();
+  const opening = session.open("other.fcad", async () => bytesOf(9), () => decision.promise);
+  await tick();
+  transport.calls.at(-1)!.resolve(readOk());
+  await tick();
+  session.end();
+  decision.resolve(true);
+  assert.equal((await opening).status, "superseded");
+  assert.equal(session.snapshot, null);
+  assert.equal(session.copyBytes(), null);
+});
+
 test("a late Rust answer after end() does not restore the document", async () => {
   for (const rejectOnDispose of [true, false]) {
     const { session, transport } = newSession();
@@ -302,6 +338,35 @@ test("dirty is derived from the accepted bytes; downloading does not clear it", 
   await edit(session, transport, editOk(bytesOf(1, 2, 3)));
   assert.equal(session.snapshot!.dirty, false, "bytes equal to the opened file are not unsaved changes");
   assert.equal(session.snapshot!.revision, 3);
+});
+
+test("Buffer input and output cannot alias accepted bytes", async () => {
+  const { session, transport } = newSession();
+  const source = Buffer.from([1, 2, 3]);
+  await openAccepted(session, transport, "plate.fcad", source);
+  source.fill(0);
+  assert.deepEqual([...session.copyBytes()!], [1, 2, 3]);
+  const output = Buffer.from([4, 5]);
+  const pending = session.setExpression(change);
+  const reply = readOk();
+  assert.ok(reply.ok);
+  transport.calls.at(-1)!.resolve({ ...reply, bytes: output });
+  await pending;
+  output.fill(0);
+  assert.deepEqual([...session.copyBytes()!], [4, 5]);
+});
+
+test("an already frozen inspection does not leave its children mutable", async () => {
+  const { session, transport } = newSession();
+  const pending = session.open("plate.fcad", async () => bytesOf(1));
+  await tick();
+  const reply = readOk();
+  assert.equal(reply.ok, true);
+  if (!reply.ok) return;
+  Object.freeze(reply.inspection);
+  transport.calls.at(-1)!.resolve(reply);
+  await pending;
+  assert.equal(Object.isFrozen(session.snapshot!.inspection.expression_slots[0]!.expression), true);
 });
 
 test("nothing handed in or out can corrupt the accepted revision", async () => {

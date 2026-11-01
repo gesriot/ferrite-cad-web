@@ -55,6 +55,51 @@ async function dirtyDocument(context: ReturnType<typeof setup>) {
   assert.equal(context.session.snapshot!.dirty, true);
 }
 
+for (const stage of ["file read", "Rust read"] as const) {
+  test(`an edit accepted during ${stage} requires a fresh discard decision before replacement`, async () => {
+    const context = setup();
+    await openAccepted(context.session, context.transport, "plate.fcad", bytesOf(1));
+    context.answerWith(async () => false);
+    const slow = deferred<ArrayBuffer>();
+    const opening = context.controller.openFile({
+      name: "other.fcad", size: 1,
+      arrayBuffer: () => stage === "file read" ? slow.promise : Promise.resolve(bytesOf(9).buffer),
+    });
+    await tick();
+    const candidate = stage === "Rust read" ? context.transport.calls.at(-1)! : undefined;
+    await edit(context.session, context.transport, editOk(bytesOf(4)));
+    const accepted = context.session.snapshot;
+    if (!candidate) {
+      slow.resolve(bytesOf(9).buffer);
+      await tick();
+    }
+    (candidate ?? context.transport.calls.at(-1)!).resolve(readOk());
+    const result = await opening;
+    assert.equal(result.kind === "cancelled" || (result.kind === "open" && result.outcome.status === "cancelled"), true);
+    assert.equal(context.questions.length, 1);
+    assert.equal(context.session.snapshot, accepted);
+    assert.deepEqual([...context.session.copyBytes()!], [4]);
+  });
+}
+
+test("Discard before reading authorizes only that revision, not edits accepted during the read", async () => {
+  const context = setup();
+  await dirtyDocument(context);
+  context.answerWith(async () => context.questions.length === 1);
+  const slow = deferred<ArrayBuffer>();
+  const opening = context.controller.openFile({ name: "other.fcad", size: 1, arrayBuffer: () => slow.promise });
+  await tick();
+  await edit(context.session, context.transport, editOk(bytesOf(6)));
+  const accepted = context.session.snapshot;
+  slow.resolve(bytesOf(9).buffer);
+  await tick();
+  context.transport.calls.at(-1)!.resolve(readOk());
+  await opening;
+  assert.equal(context.questions.length, 2);
+  assert.equal(context.session.snapshot, accepted);
+  assert.deepEqual([...context.session.copyBytes()!], [6]);
+});
+
 test("a clean document is replaced without a question", async () => {
   const context = setup();
   await openAccepted(context.session, context.transport, "a.fcad", bytesOf(1));

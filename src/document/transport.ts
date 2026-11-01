@@ -106,7 +106,7 @@ export class WorkerDocumentTransport implements RustDocumentTransport {
 
   open(bytes: Uint8Array): Promise<OpenReply> {
     // Transfer a private copy: the caller's buffer must survive the call.
-    const buffer = bytes.slice().buffer;
+    const buffer = new Uint8Array(bytes).buffer;
     return this.#submit(
       (id) => ({ id, operation: "open", bytes: buffer }),
       [buffer],
@@ -115,11 +115,11 @@ export class WorkerDocumentTransport implements RustDocumentTransport {
   }
 
   setExpression(bytes: Uint8Array, change: ExpressionChange): Promise<EditReply> {
-    const buffer = bytes.slice().buffer;
+    const buffer = new Uint8Array(bytes).buffer;
     // Only the three fields Rust accepts; it denies unknown ones.
     const request: ExpressionChange = {
       object: change.object,
-      slot: change.slot,
+      slot: structuredClone(change.slot),
       value_mm: change.value_mm,
     };
     return this.#submit(
